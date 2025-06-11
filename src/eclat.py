@@ -43,40 +43,44 @@ class Eclat:
     def _build_initial_tid_lists(self):
         """
         Metoda prywatna do tworzenia początkowych list identyfikatorów transakcji (TID-list)
-        dla pojedynczych produktów, które spełniają próg min_support.
-
-        Na tym etapie obsługujemy tylko literały pozytywne.
+        dla pojedynczych literałów (pozytywnych i/lub negowanych), które spełniają próg min_support.
+        WERSJA ZOPTYMALIZOWANA PAMIĘCIOWO.
         """
-        # Obliczamy minimalną liczbę transakcji, jaką musi mieć item, by być częstym
         min_transactions = self.min_support * self.num_transactions
-
-        temp_tid_lists = {}
-        # Iterujemy po każdej transakcji z jej indeksem (TID)
+        
+        temp_positive_tid_lists = {}
         for tid, transaction in enumerate(self.transactions):
             for item in transaction:
-                # Jeśli itemu nie ma jeszcze w naszej mapie, tworzymy dla niego pusty zbiór
-                if item not in temp_tid_lists:
-                    temp_tid_lists[item] = set()
-                # Dodajemy ID transakcji do zbioru dla danego itemu
-                temp_tid_lists[item].add(tid)
+                if item not in temp_positive_tid_lists:
+                    temp_positive_tid_lists[item] = set()
+                temp_positive_tid_lists[item].add(tid)
+
+        self.tid_lists = {}
         
-        # Filtrujemy TID-listy, zostawiając tylko te dla częstych itemów
-        # Używamy słownika składanego (dictionary comprehension) dla zwięzłości
-        self.tid_lists = {
-            item: tids
-            for item, tids in temp_tid_lists.items()
-            if len(tids) >= min_transactions
-        }
+        # Najpierw znajdujemy i przechowujemy częste literały POZYTYWNE
+        frequent_positives = {}
+        for item, tids in temp_positive_tid_lists.items():
+            if len(tids) >= min_transactions:
+                frequent_positives[item] = tids
+                self.tid_lists[(item, '+')] = tids
 
-        # Inicjalizujemy zbiór częstych itemsetów
-        # Na razie zawiera on tylko pojedyncze, częste itemy
-        # Używamy frozenset, ponieważ klucze w słowniku muszą być niemutowalne
+        # Jeśli opcja negacji jest włączona, dodajemy częste literały NEGOWANE
+        if self.use_negation:
+            all_tids = set(range(self.num_transactions))
+            
+            # *** KLUCZOWA ZMIANA: Iterujemy TYLKO po częstych pozytywnych ***
+            # Zamiast generować negacje dla 16k itemów, robimy to tylko dla kilkudziesięciu.
+            for item, tids in frequent_positives.items():
+                negated_tids = all_tids - tids
+                if len(negated_tids) >= min_transactions:
+                    self.tid_lists[(item, '-')] = negated_tids
+
         self.frequent_itemsets = {
-            frozenset([item]): len(tids)
-            for item, tids in self.tid_lists.items()
+            frozenset([literal]): len(tids)
+            for literal, tids in self.tid_lists.items()
         }
 
-        print(f"Zbudowano początkowe TID-listy. Liczba częstych pojedynczych itemów: {len(self.tid_lists)}")
+        print(f"Zbudowano początkowe TID-listy. Liczba częstych pojedynczych literałów: {len(self.tid_lists)}")
 
     def transform(self):
         """
