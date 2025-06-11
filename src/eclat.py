@@ -44,10 +44,39 @@ class Eclat:
         """
         Metoda prywatna do tworzenia początkowych list identyfikatorów transakcji (TID-list)
         dla pojedynczych produktów, które spełniają próg min_support.
+
+        Na tym etapie obsługujemy tylko literały pozytywne.
         """
-        # TODO: Zaimplementować logikę
-        print("Budowanie początkowych TID-list - do implementacji!")
-        pass
+        # Obliczamy minimalną liczbę transakcji, jaką musi mieć item, by być częstym
+        min_transactions = self.min_support * self.num_transactions
+
+        temp_tid_lists = {}
+        # Iterujemy po każdej transakcji z jej indeksem (TID)
+        for tid, transaction in enumerate(self.transactions):
+            for item in transaction:
+                # Jeśli itemu nie ma jeszcze w naszej mapie, tworzymy dla niego pusty zbiór
+                if item not in temp_tid_lists:
+                    temp_tid_lists[item] = set()
+                # Dodajemy ID transakcji do zbioru dla danego itemu
+                temp_tid_lists[item].add(tid)
+        
+        # Filtrujemy TID-listy, zostawiając tylko te dla częstych itemów
+        # Używamy słownika składanego (dictionary comprehension) dla zwięzłości
+        self.tid_lists = {
+            item: tids
+            for item, tids in temp_tid_lists.items()
+            if len(tids) >= min_transactions
+        }
+
+        # Inicjalizujemy zbiór częstych itemsetów
+        # Na razie zawiera on tylko pojedyncze, częste itemy
+        # Używamy frozenset, ponieważ klucze w słowniku muszą być niemutowalne
+        self.frequent_itemsets = {
+            frozenset([item]): len(tids)
+            for item, tids in self.tid_lists.items()
+        }
+
+        print(f"Zbudowano początkowe TID-listy. Liczba częstych pojedynczych itemów: {len(self.tid_lists)}")
 
     def transform(self):
         """
