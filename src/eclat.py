@@ -91,58 +91,44 @@ class Eclat:
     def _discover_frequent_itemsets(self, item_tid_lists_k, k):
         """
         Rekurencyjnie odkrywa częste zbiory o rozmiarze k+1 na podstawie
-        zbiorów o rozmiarze k.
-
-        Args:
-            item_tid_lists_k (dict): Słownik {item: tid_list} dla zbiorów o rozmiarze k.
-                                     Dla k=1, item jest stringiem. Dla k>1, item jest frozensetem.
-            k (int): Aktualny rozmiar itemsetów.
+        zbiorów o rozmiarze k. Wersja uniwersalna, obsługująca krotki (item, sign).
         """
-        # Warunek stopu rekurencji: jeśli nie ma już itemsetów do rozszerzenia
         if not item_tid_lists_k:
             return
 
         min_transactions = self.min_support * self.num_transactions
-        
-        # Słownik na znalezione częste zbiory o rozmiarze k+1
         frequent_itemsets_k_plus_1 = {}
 
-        # Używamy posortowanej listy kluczy, aby uniknąć duplikatów i powtórzeń
-        # Np. połączymy {A} z {B}, ale nie połączymy później {B} z {A}
-        items_k = sorted(list(item_tid_lists_k.keys()))
+        # Sortujemy literały. Python domyślnie posortuje krotki najpierw po pierwszym elemencie, potem po drugim.
+        literals_k = sorted(list(item_tid_lists_k.keys()))
 
-        for i in range(len(items_k)):
-            for j in range(i + 1, len(items_k)):
-                item_i = items_k[i]
-                item_j = items_k[j]
+        for i in range(len(literals_k)):
+            for j in range(i + 1, len(literals_k)):
+                literal_i = literals_k[i]
+                literal_j = literals_k[j]
 
-                # Łączymy dwa itemsety w nowego kandydata
-                # Dla k=1, łączymy dwa itemy w zbiór 2-elementowy
-                # Dla k>1, łączymy dwa zbiory k-elementowe
+                # Dla k=1, nasze "itemy" to pojedyncze krotki. Tworzymy z nich frozenset.
                 if k == 1:
-                    candidate = frozenset([item_i, item_j])
-                else: # k > 1
-                    candidate = item_i.union(item_j)
+                    # Sprawdzamy, czy nie próbujemy połączyć tego samego itemu z samym sobą
+                    # (np. {'32', '+'} i {'32', '-'}) - taka reguła jest bez sensu.
+                    if literal_i[0] == literal_j[0]:
+                        continue
+                    candidate = frozenset([literal_i, literal_j])
+                else: # k > 1, nasze "itemy" to już frozensety krotek
+                    candidate = literal_i.union(literal_j)
 
-                # Optymalizacja: jeśli kandydat ma zły rozmiar, pomijamy go
-                # To się dzieje, gdy itemsety nie miały wspólnego prefixu
                 if len(candidate) != k + 1:
                     continue
                 
-                # Obliczamy TID-listę kandydata przez przecięcie TID-list jego składowych
-                tid_list_i = item_tid_lists_k[item_i]
-                tid_list_j = item_tid_lists_k[item_j]
-                candidate_tid_list = tid_list_i.intersection(tid_list_j) #serce Eclat - zamiast skanowac przecinamy dwa zbiory ID transakcji, szybkie
+                tid_list_i = item_tid_lists_k[literal_i]
+                tid_list_j = item_tid_lists_k[literal_j]
+                candidate_tid_list = tid_list_i.intersection(tid_list_j)
 
-                # Sprawdzamy, czy kandydat jest częsty
                 if len(candidate_tid_list) >= min_transactions:
                     frequent_itemsets_k_plus_1[candidate] = candidate_tid_list
 
-        # Jeśli znaleziono jakieś częste zbiory, dodajemy je do głównego wyniku
         if frequent_itemsets_k_plus_1:
-            # Aktualizujemy nasz główny słownik z wynikami
             for itemset, tid_list in frequent_itemsets_k_plus_1.items():
                 self.frequent_itemsets[itemset] = len(tid_list)
             
-            # Wywołujemy rekurencję dla nowo znalezionych zbiorów
             self._discover_frequent_itemsets(frequent_itemsets_k_plus_1, k + 1)
